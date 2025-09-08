@@ -8,7 +8,7 @@ polishing parameters.
 """
 
 # =============================================================================
-# BLAST PARAMETERS
+# BLAST PARAMETERS - NOT NEEDED IF VSEARCH
 # =============================================================================
 
 BLAST_PARAMS = {
@@ -27,7 +27,7 @@ BLAST_PARAMS = {
 }
 
 # =============================================================================
-# CLUSTERING PARAMETERS
+# BLAST CLUSTERING PARAMETERS - NOT NEEDED IF VSEARCH
 # =============================================================================
 
 CLUSTERING_PARAMS = {
@@ -74,7 +74,7 @@ VSEARCH_PARAMS = {
 }
 
 # =============================================================================
-# CONSENSUS POLISHING PARAMETERS
+# MAFFT CONSENSUS POLISHING PARAMETERS - NO TNEEDED IF RACON
 # =============================================================================
 
 POLISHING_PARAMS = {
