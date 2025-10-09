@@ -3,8 +3,7 @@
 Cluster Polish Tool
 
 This script implements a modular clustering pipeline that groups reads based on 
-high sequence similarity. It supports both BLAST and VSEARCH clustering algorithms
-with optional MAFFT or RACON-based consensus polishing.
+high sequence similarity using VSEARCH, with optional RACON-based consensus polishing.
 
 Author: Assistant
 Date: 2024
@@ -22,12 +21,10 @@ import logging
 
 # Import modular components
 from params import (
-    BLAST_PARAMS, CLUSTERING_PARAMS, VSEARCH_PARAMS, POLISHING_PARAMS, RACON_PARAMS, DEBUG_PARAMS,
-    REDUNDANT_REMOVAL_PARAMS, CLUSTERING_ALGORITHMS, POLISHING_ALGORITHMS, DEFAULT_CLUSTERING_ALGORITHM, DEFAULT_POLISHING_ALGORITHM
+    VSEARCH_PARAMS, RACON_PARAMS, DEBUG_PARAMS,
+    REDUNDANT_REMOVAL_PARAMS, DEFAULT_CLUSTERING_ALGORITHM, DEFAULT_POLISHING_ALGORITHM
 )
-from cluster_by_blast import BlastClusterer
 from cluster_by_vsearch import VsearchClusterer
-from polish_by_mafft import MafftPolisher
 from polish_by_racon import RaconPolisher
 
 # Set up logging
@@ -36,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 class ReadClusterer:
     def __init__(self, input_file, output_dir, coverage_threshold=None, identity_threshold=None,
-                 min_cluster_size=None, max_clusters=None, max_read_length=None, save_blast_outputs=None, 
-                 verbose=None, save_intermediate=None, polish_clusters=None, use_fast_clustering=None,
+                 min_cluster_size=None, max_clusters=None, max_read_length=None,
+                 verbose=None, save_intermediate=None, polish_clusters=None,
                  clustering_algorithm=None, polishing_algorithm=None, output_longest_reads=None,
                  remove_redundant_consensus=None):
         """
@@ -50,13 +47,11 @@ class ReadClusterer:
             identity_threshold (int): Minimum identity percentage for clustering
             min_cluster_size (int): Minimum reads in a cluster
             max_clusters (int): Maximum number of clusters
-            save_blast_outputs (bool): Save BLAST output files for debugging
             verbose (bool): Print detailed output
             save_intermediate (bool): Save intermediate files
             polish_clusters (bool): Whether to calculate consensus sequences for clusters
-            use_fast_clustering (bool): Whether to use VSEARCH instead of BLAST for clustering
-            clustering_algorithm (str): Clustering algorithm to use ('blast' or 'vsearch')
-            polishing_algorithm (str): Polishing algorithm to use ('mafft' or 'simple')
+            clustering_algorithm (str): Clustering algorithm to use ('vsearch')
+            polishing_algorithm (str): Polishing algorithm to use ('racon')
             output_longest_reads (bool): Whether to output longest read from each cluster
             remove_redundant_consensus (bool): Whether to remove redundant consensus sequences
         """
@@ -64,16 +59,15 @@ class ReadClusterer:
         self.output_dir = Path(output_dir)
         
         # Use provided parameters or defaults
-        self.coverage_threshold = coverage_threshold if coverage_threshold is not None else CLUSTERING_PARAMS['coverage_threshold']
-        self.identity_threshold = identity_threshold if identity_threshold is not None else CLUSTERING_PARAMS['identity_threshold']
-        self.min_cluster_size = min_cluster_size if min_cluster_size is not None else CLUSTERING_PARAMS['min_cluster_size']
-        self.max_clusters = max_clusters if max_clusters is not None else CLUSTERING_PARAMS['max_clusters']
-        self.max_read_length = max_read_length if max_read_length is not None else CLUSTERING_PARAMS['max_read_length']
-        self.save_blast_outputs = save_blast_outputs if save_blast_outputs is not None else DEBUG_PARAMS['save_blast_outputs']
+        # Fallbacks mirror argparse defaults
+        self.coverage_threshold = coverage_threshold if coverage_threshold is not None else 95
+        self.identity_threshold = identity_threshold if identity_threshold is not None else 90
+        self.min_cluster_size = min_cluster_size if min_cluster_size is not None else 1
+        self.max_clusters = max_clusters if max_clusters is not None else None
+        self.max_read_length = max_read_length if max_read_length is not None else None
         self.verbose = verbose if verbose is not None else DEBUG_PARAMS['verbose']
         self.save_intermediate = save_intermediate if save_intermediate is not None else DEBUG_PARAMS['save_intermediate']
         self.polish_clusters = polish_clusters if polish_clusters is not None else False
-        self.use_fast_clustering = use_fast_clustering if use_fast_clustering is not None else CLUSTERING_PARAMS['use_fast_clustering']
         self.output_longest_reads = output_longest_reads if output_longest_reads is not None else DEBUG_PARAMS['output_longest_reads']
         self.remove_redundant_consensus = remove_redundant_consensus if remove_redundant_consensus is not None else REDUNDANT_REMOVAL_PARAMS['enabled']
         
@@ -119,19 +113,15 @@ class ReadClusterer:
     
     def _initialize_components(self):
         """Initialize clustering and polishing components based on selected algorithms."""
-        # Initialize clustering component
-        if self.clustering_algorithm == 'blast':
-            self.clusterer = BlastClusterer(BLAST_PARAMS)
-        elif self.clustering_algorithm == 'vsearch':
+        # Initialize clustering component (VSEARCH only)
+        if self.clustering_algorithm == 'vsearch':
             self.clusterer = VsearchClusterer(VSEARCH_PARAMS)
         else:
             raise ValueError(f"Unknown clustering algorithm: {self.clustering_algorithm}")
         
         # Initialize polishing component
         if self.polish_clusters:
-            if self.polishing_algorithm == 'mafft':
-                self.polisher = MafftPolisher(POLISHING_PARAMS)
-            elif self.polishing_algorithm == 'racon':
+            if self.polishing_algorithm == 'racon':
                 self.polisher = RaconPolisher(RACON_PARAMS)
             else:
                 raise ValueError(f"Unknown polishing algorithm: {self.polishing_algorithm}")
@@ -148,11 +138,9 @@ class ReadClusterer:
         if self.input_format != 'fasta':
             raise ValueError(f"Input file must be in FASTA format, detected: {self.input_format}")
         
-        # Note: MAFFT or RACON is required for consensus calculation
+        # Note: RACON is required for consensus calculation
         if self.polish_clusters:
-            if self.polishing_algorithm == 'mafft':
-                logger.info("Nanopore consensus calculation enabled (MAFFT required for alignment)")
-            elif self.polishing_algorithm == 'racon':
+            if self.polishing_algorithm == 'racon':
                 logger.info("Nanopore consensus calculation enabled (RACON and minimap2 required for alignment)")
         
         logger.info(f"Input format: {self.input_format}")
@@ -208,20 +196,11 @@ class ReadClusterer:
                 return {}
             
             # Step 2: Run clustering using selected algorithm
-            logger.info(f"Step 2: Using {self.clustering_algorithm.upper()} for clustering")
-            
-            if self.clustering_algorithm == 'blast':
-                cluster_files, cluster_list, longest_reads_list = self.clusterer.cluster_reads(
-                    reads, temp_dir, self.output_dir, 
-                    self.coverage_threshold, self.identity_threshold,
-                    self.min_cluster_size, self.max_clusters,
-                    self.save_blast_outputs, self.verbose, self.output_longest_reads
-                )
-            elif self.clustering_algorithm == 'vsearch':
-                cluster_files, cluster_list, longest_reads_list = self.clusterer.cluster_reads(
-                    reads, temp_dir, self.output_dir,
-                    self.min_cluster_size, use_quality_filtering=True, output_longest_reads=self.output_longest_reads
-                )
+            logger.info(f"Step 2: Using VSEARCH for clustering")
+            cluster_files, cluster_list, longest_reads_list = self.clusterer.cluster_reads(
+                reads, temp_dir, self.output_dir,
+                self.min_cluster_size, use_quality_filtering=True, output_longest_reads=self.output_longest_reads
+            )
             
             # Update cluster list and longest reads list
             self.cluster_list = cluster_list
@@ -429,24 +408,16 @@ class ReadClusterer:
             # Polishing parameters (if enabled)
             if self.polish_clusters:
                 f.write("Polishing Parameters:\n")
-                f.write(f"  Method: {self.polishing_algorithm.upper()} alignment + Nanopore-optimized consensus\n")
-                if self.polishing_algorithm == 'mafft':
-                    f.write(f"  Alignment tool: MAFFT (superior to MUSCLE for similar sequences)\n")
-                    f.write(f"  Coverage threshold: {POLISHING_PARAMS['min_coverage_threshold']*100:.0f}% for confident calls\n")
-                    f.write(f"  Ambiguous base threshold: {POLISHING_PARAMS['ambiguous_threshold']*100:.0f}% for IUPAC codes\n")
-                    f.write(f"  Padding: N's instead of gaps for length differences\n")
-                    f.write(f"  Max reads for MAFFT: {POLISHING_PARAMS['max_reads_for_polishing']} (random sampling for large clusters)\n")
-                elif self.polishing_algorithm == 'racon':
-                    f.write(f"  Alignment tool: minimap2 + RACON (optimized for long-read consensus)\n")
-                    f.write(f"  Match score: {RACON_PARAMS['match']}\n")
-                    f.write(f"  Mismatch penalty: {RACON_PARAMS['mismatch']}\n")
-                    f.write(f"  Gap penalty: {RACON_PARAMS['gap']}\n")
-                    f.write(f"  Window length: {RACON_PARAMS['window_length']}\n")
-                    f.write(f"  Quality threshold: {RACON_PARAMS['quality_threshold']}\n")
-                    f.write(f"  Error threshold: {RACON_PARAMS['error_threshold']}\n")
-                    f.write(f"  Max reads for RACON: {RACON_PARAMS['max_reads_for_polishing']} (random sampling for large clusters)\n")
-                if self.clustering_algorithm == 'vsearch':
-                    f.write(f"  VSEARCH optimization: Quality filtering for better alignment\n")
+                f.write(f"  Method: RACON alignment + Nanopore-optimized consensus\n")
+                f.write(f"  Alignment tool: minimap2 + RACON (optimized for long-read consensus)\n")
+                f.write(f"  Match score: {RACON_PARAMS['match']}\n")
+                f.write(f"  Mismatch penalty: {RACON_PARAMS['mismatch']}\n")
+                f.write(f"  Gap penalty: {RACON_PARAMS['gap']}\n")
+                f.write(f"  Window length: {RACON_PARAMS['window_length']}\n")
+                f.write(f"  Quality threshold: {RACON_PARAMS['quality_threshold']}\n")
+                f.write(f"  Error threshold: {RACON_PARAMS['error_threshold']}\n")
+                f.write(f"  Max reads for RACON: {RACON_PARAMS['max_reads_for_polishing']} (random sampling for large clusters)\n")
+                f.write(f"  VSEARCH optimization: Quality filtering for better alignment\n")
                 f.write("\n")
             
             # Redundant removal parameters (if enabled)
@@ -528,7 +499,7 @@ class ReadClusterer:
 def cluster_polish():
     """Main function with command line argument parsing."""
     parser = argparse.ArgumentParser(
-        description="Modular read clustering pipeline with BLAST/VSEARCH clustering and MAFFT/RACON polishing",
+        description="Modular read clustering pipeline with VSEARCH clustering and optional RACON polishing",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -536,14 +507,7 @@ Examples:
   python cluster_polish.py input.fasta output_dir --coverage 90 --identity 85
   python cluster_polish.py input.fasta output_dir --min-cluster-size 5 --max-clusters 100
   python cluster_polish.py input.fasta output_dir --max-read-length 5000
-  python cluster_polish.py input.fasta output_dir --verbose --save-blast-outputs
-  python cluster_polish.py input.fasta output_dir -p --verbose  # MAFFT + Nanopore consensus
-  python cluster_polish.py input.fasta output_dir -f  # Fast clustering with VSEARCH
-  python cluster_polish.py input.fasta output_dir -f -p  # Fast clustering + MAFFT consensus
-  python cluster_polish.py input.fasta output_dir --clustering-algorithm vsearch  # Use VSEARCH
-  python cluster_polish.py input.fasta output_dir --clustering-algorithm blast --polishing-algorithm mafft  # Explicit algorithm selection
-  python cluster_polish.py input.fasta output_dir --polishing-algorithm racon  # Use RACON for polishing
-  python cluster_polish.py input.fasta output_dir --clustering-algorithm vsearch --polishing-algorithm racon  # VSEARCH + RACON
+  python cluster_polish.py input.fasta output_dir -p --verbose  # RACON consensus
   python cluster_polish.py input.fasta output_dir --output-longest-reads  # Output longest read from each cluster
   python cluster_polish.py input.fasta output_dir -p --remove-redundant-consensus  # Polish + remove redundant consensus
         """
@@ -556,13 +520,9 @@ Examples:
     parser.add_argument('--min-cluster-size', type=int, default=1, help='Minimum number of reads in a cluster (default: 1)')
     parser.add_argument('--max-clusters', type=int, help='Maximum number of clusters to create (default: unlimited)')
     parser.add_argument('--max-read-length', type=int, help='Maximum read length to consider for clustering (default: unlimited)')
-    parser.add_argument('-p', '--polish', action='store_true', help='Calculate consensus sequences for clusters using MAFFT/RACON alignment + Nanopore-optimized method')
-    parser.add_argument('-f', '--fast', action='store_true', help='Use VSEARCH for fast clustering instead of BLAST (10-100x faster, optimized for MAFFT consensus)')
-    parser.add_argument('--clustering-algorithm', choices=['blast', 'vsearch'], default='blast', help='Clustering algorithm to use (default: blast)')
-    parser.add_argument('--polishing-algorithm', choices=['mafft', 'racon', 'simple'], default='mafft', help='Polishing algorithm to use (default: mafft)')
+    parser.add_argument('-p', '--polish', action='store_true', help='Calculate consensus sequences for clusters using RACON alignment + Nanopore-optimized method')
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('--verbose', action='store_true', help='Print detailed output')
-    parser.add_argument('--save-blast-outputs', action='store_true', help='Save BLAST output files for debugging')
     parser.add_argument('--save-intermediate', action='store_true', help='Save intermediate files')
     parser.add_argument('--output-longest-reads', action='store_true', help='Output longest read from each cluster to separate FASTA file')
     parser.add_argument('--remove-redundant-consensus', action='store_true', help='Remove redundant consensus sequences using VSEARCH after polishing')
@@ -575,8 +535,8 @@ Examples:
         logger.setLevel(logging.DEBUG)
     
     try:
-        # Determine clustering algorithm (backward compatibility with --fast flag)
-        clustering_algorithm = 'vsearch' if args.fast else args.clustering_algorithm
+        # Clustering algorithm is fixed to VSEARCH
+        clustering_algorithm = 'vsearch'
         
         # Create clusterer instance
         clusterer = ReadClusterer(
@@ -587,13 +547,11 @@ Examples:
             min_cluster_size=args.min_cluster_size,
             max_clusters=args.max_clusters,
             max_read_length=args.max_read_length,
-            save_blast_outputs=args.save_blast_outputs,
             verbose=args.verbose,
             save_intermediate=args.save_intermediate,
             polish_clusters=args.polish,
-            use_fast_clustering=args.fast,  # Keep for backward compatibility
             clustering_algorithm=clustering_algorithm,
-            polishing_algorithm=args.polishing_algorithm,
+            polishing_algorithm='racon',
             output_longest_reads=args.output_longest_reads,
             remove_redundant_consensus=args.remove_redundant_consensus
         )
@@ -605,7 +563,7 @@ Examples:
         logger.info(f"Cluster files created in: {args.output_dir}")
         
         if args.polish:
-            logger.info(f"Consensus sequences calculated using {args.polishing_algorithm.upper()} and saved to cluster_consensus.fasta")
+            logger.info(f"Consensus sequences calculated using RACON and saved to cluster_consensus.fasta")
             if args.remove_redundant_consensus:
                 logger.info(f"Redundant consensus sequences removed and saved to cluster_consensus_deduplicated.fasta")
         

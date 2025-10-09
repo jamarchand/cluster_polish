@@ -1,11 +1,11 @@
 # Cluster Polish Tool
 
-A modular read clustering pipeline that groups reads based on high sequence similarity with optional consensus polishing and redundant sequence removal.
+A modular read clustering pipeline that groups reads based on high sequence similarity using VSEARCH, with optional RACON-based consensus polishing and redundant sequence removal.
 
 ## Features
 
-- **Dual Clustering Algorithms**: BLAST and VSEARCH support
-- **Consensus Polishing**: MAFFT and RACON-based consensus calculation
+- **Clustering**: VSEARCH-based clustering
+- **Consensus Polishing**: Optional RACON-based consensus calculation
 - **Redundant Removal**: VSEARCH-based deduplication of consensus sequences
 - **Flexible Parameters**: Configurable thresholds and filtering options
 - **Comprehensive Reporting**: Detailed summary reports and statistics
@@ -17,10 +17,8 @@ A modular read clustering pipeline that groups reads based on high sequence simi
 
 - Python 3.7+
 - BioPython
-- BLAST+ (for BLAST clustering)
-- VSEARCH (for VSEARCH clustering and redundant removal)
-- MAFFT (for MAFFT polishing)
-- RACON + minimap2 (for RACON polishing)
+- VSEARCH (for clustering and redundant removal)
+- RACON + minimap2 (for polishing)
 
 ### Install Dependencies
 
@@ -30,26 +28,26 @@ pip install biopython
 
 # Install external tools (examples for different systems)
 # Ubuntu/Debian
-sudo apt-get install blast2 vsearch mafft racon minimap2
+sudo apt-get install vsearch racon minimap2
 
 # macOS with Homebrew
-brew install blast vsearch mafft racon minimap2
+brew install vsearch racon minimap2
 
 # Conda
-conda install -c bioconda blast vsearch mafft racon minimap2
+conda install -c bioconda vsearch racon minimap2
 ```
 
 ## Quick Start
 
 ```bash
-# Basic clustering with BLAST
+# Basic clustering (VSEARCH)
 python cluster_polish.py input.fasta output_dir
 
-# Fast clustering with VSEARCH + consensus polishing
-python cluster_polish.py input.fasta output_dir -f -p
+# Clustering with RACON consensus polishing
+python cluster_polish.py input.fasta output_dir -p
 
-# Advanced example with all features
-python cluster_polish.py input.fasta output_dir --clustering-algorithm vsearch --polishing-algorithm racon --output-longest-reads --min-cluster-size 15 --max-read-length 10000 -f -p
+# Advanced example with more options
+python cluster_polish.py input.fasta output_dir --output-longest-reads --min-cluster-size 15 --max-read-length 10000 -p
 ```
 
 ## Usage
@@ -74,17 +72,13 @@ python cluster_polish.py <input_file> <output_dir> [options]
 - `--max-clusters`: Maximum number of clusters to create (default: unlimited)
 - `--max-read-length`: Maximum read length to consider (default: unlimited)
 
-#### Algorithm Selection
-- `--clustering-algorithm`: Choose 'blast' or 'vsearch' (default: blast)
-- `--polishing-algorithm`: Choose 'mafft', 'racon', or 'simple' (default: mafft)
-- `-f, --fast`: Use VSEARCH for fast clustering (10-100x faster)
-- `-p, --polish`: Calculate consensus sequences for clusters
+#### Polishing
+- `-p, --polish`: Calculate consensus sequences for clusters (RACON)
 
 #### Advanced Features
 - `--remove-redundant-consensus`: Remove redundant consensus sequences using VSEARCH
 - `--output-longest-reads`: Output longest read from each cluster
 - `--save-intermediate`: Save intermediate files for debugging
-- `--save-blast-outputs`: Save BLAST output files for debugging
 
 #### Output Control
 - `--verbose`: Print detailed output
@@ -92,19 +86,19 @@ python cluster_polish.py <input_file> <output_dir> [options]
 
 ## Examples
 
-### Example 1: Basic BLAST Clustering
+### Example 1: Basic Clustering (VSEARCH)
 ```bash
 python cluster_polish.py reads.fasta clusters_basic
 ```
 
-### Example 2: Fast VSEARCH Clustering with Consensus
+### Example 2: VSEARCH Clustering with RACON Consensus
 ```bash
-python cluster_polish.py reads.fasta clusters_vsearch -f -p
+python cluster_polish.py reads.fasta clusters_vsearch -p
 ```
 
-### Example 3: Advanced Pipeline with All Features
+### Example 3: Advanced Pipeline with Options
 ```bash
-python cluster_polish.py inputs.fasta output_dir_name --clustering-algorithm vsearch --polishing-algorithm racon --output-longest-reads --min-cluster-size 15 --max-read-length 10000 -f -p
+python cluster_polish.py inputs.fasta output_dir_name --output-longest-reads --min-cluster-size 15 --max-read-length 10000 -p
 ```
 
 ### Example 4: High-Quality Clustering with Redundant Removal
@@ -112,24 +106,24 @@ python cluster_polish.py inputs.fasta output_dir_name --clustering-algorithm vse
 python cluster_polish.py reads.fasta clusters_high_quality --coverage 98 --identity 95 --min-cluster-size 10 -p --remove-redundant-consensus
 ```
 
-### Example 5: RACON Polishing with Debugging
+### Example 4: RACON Polishing with Debugging
 ```bash
-python cluster_polish.py reads.fasta clusters_racon --polishing-algorithm racon --verbose --save-intermediate -p
+python cluster_polish.py reads.fasta clusters_racon --verbose --save-intermediate -p
 ```
 
-### Example 6: Large Dataset Processing
+### Example 5: Large Dataset Processing
 ```bash
-python cluster_polish.py large_dataset.fasta clusters_large --clustering-algorithm vsearch --max-clusters 1000 --max-read-length 5000 -f -p --output-longest-reads
+python cluster_polish.py large_dataset.fasta clusters_large --max-clusters 1000 --max-read-length 5000 -p --output-longest-reads
 ```
 
 ### Example 7: Conservative Clustering
 ```bash
-python cluster_polish.py reads.fasta clusters_conservative --coverage 99 --identity 98 --min-cluster-size 20 --max-clusters 100
+python cluster_polish.py inputs/kpc_hq.fasta outputs/clusters_conservative --coverage 99 --identity 98 --min-cluster-size 20 --max-clusters 100 --max-read-length 1000
 ```
 
-### Example 8: Complete Pipeline with Deduplication
+### Example 6: Complete Pipeline with Deduplication
 ```bash
-python cluster_polish.py reads.fasta final_clusters --clustering-algorithm vsearch --polishing-algorithm mafft --remove-redundant-consensus --output-longest-reads --verbose -f -p
+python cluster_polish.py reads.fasta final_clusters --remove-redundant-consensus --output-longest-reads --verbose -p
 ```
 
 ## Output Files
@@ -173,25 +167,15 @@ REDUNDANT_REMOVAL_PARAMS = {
 }
 ```
 
-## Algorithm Comparison
+## Notes on Algorithms
 
-| Feature | BLAST | VSEARCH |
-|---------|-------|---------|
-| Speed | Slower | 10-100x faster |
-| Memory | Moderate | Lower |
-| Accuracy | High | High |
-| Best for | Small datasets, high precision | Large datasets, speed |
-
-| Feature | MAFFT | RACON |
-|---------|-------|-------|
-| Speed | Moderate | Fast |
-| Accuracy | High | Very high |
-| Best for | General consensus | Long-read consensus |
+- Clustering is performed by VSEARCH (fixed).
+- Consensus polishing, when enabled with `-p`, uses RACON + minimap2.
 
 ## Performance Tips
 
-1. **For Large Datasets**: Use VSEARCH clustering (`-f` or `--clustering-algorithm vsearch`)
-2. **For High Quality**: Use RACON polishing (`--polishing-algorithm racon`)
+1. **For Large Datasets**: VSEARCH clustering is the default.
+2. **For High Quality**: Enable RACON polishing with `-p`.
 3. **For Memory Efficiency**: Set `--max-clusters` and `--max-read-length`
 4. **For Debugging**: Use `--verbose --save-intermediate`
 
@@ -200,7 +184,7 @@ REDUNDANT_REMOVAL_PARAMS = {
 ### Common Issues
 
 1. **VSEARCH not found**: Install VSEARCH and ensure it's in your PATH
-2. **MAFFT/RACON errors**: Check that external tools are properly installed
+2. **RACON/minimap2 errors**: Check that external tools are properly installed
 3. **Memory issues**: Reduce `--max-clusters` or `--max-read-length`
 4. **Slow performance**: Use VSEARCH clustering (`-f`) for large datasets
 

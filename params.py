@@ -7,37 +7,7 @@ including BLAST parameters, VSEARCH parameters, clustering settings, and
 polishing parameters.
 """
 
-# =============================================================================
-# BLAST PARAMETERS - NOT NEEDED IF VSEARCH
-# =============================================================================
-
-BLAST_PARAMS = {
-    'identity': 80,  # % identity for clustering. Default 90%
-    'query_coverage': 80,  # 95% query coverage threshold. Default 90%. 
-    'evalue': 1e-10,  # Strict E-value for high-quality matches
-    'word_size': 7,  # Standard word size
-    'dust': 'no',  # Disable dust filtering
-    'soft_masking': 'false',
-    'gapopen': 5,  # Gap opening penalty
-    'gapextend': 2,  # Gap extension penalty
-    'penalty': -1,  # Mismatch penalty
-    'reward': 1,  # Match reward
-    'max_target_seqs': 1000000,  # Allow multiple hits per query. Default 100000
-    'task': 'blastn'  # Standard BLASTN
-}
-
-# =============================================================================
-# BLAST CLUSTERING PARAMETERS - NOT NEEDED IF VSEARCH
-# =============================================================================
-
-CLUSTERING_PARAMS = {
-    'coverage_threshold': 95,  # Minimum coverage percentage to include in cluster. Default 90
-    'identity_threshold': 90,  # Minimum identity percentage for clustering. Default 90
-    'min_cluster_size': 5,  # Minimum number of reads in a cluster. Default 5
-    'max_clusters': None,  # Maximum number of clusters (None = unlimited)
-    'max_read_length': None,  # Maximum read length to consider (None = unlimited)
-    'use_fast_clustering': False,  # Use VSEARCH instead of BLAST for clustering
-}
+# (BLAST parameters removed; clustering defaults are defined in code)
 
 # =============================================================================
 # VSEARCH CLUSTERING PARAMETERS
@@ -73,23 +43,7 @@ VSEARCH_PARAMS = {
     'sizeout': True,  # Output contains size annotations
 }
 
-# =============================================================================
-# MAFFT CONSENSUS POLISHING PARAMETERS - NO TNEEDED IF RACON
-# =============================================================================
-
-POLISHING_PARAMS = {
-    'min_coverage_threshold': 0.3,  # Minimum coverage for consensus (50% of reads must have a base). Default 0.5
-    'gap_threshold': 0.3,  # Threshold for calling gaps (1.0 = 100% of reads must have gap, 0.5 = 50% of reads must have gap) %0.1 is good
-    'ambiguous_threshold': 1.0,  # Threshold for calling ambiguous bases (1.0 = always call most frequent base, never N) %1 is good
-    'max_reads_for_polishing': 50,  # Maximum number of reads to use for polishing large clusters %50 is good
-    # MAFFT alignment parameters optimized for 95% identical reads with varying sizes (trimmed ends)
-    'mafft_maxiterate': 1000,  # Maximum iterations for MAFFT (high for optimal alignment of very similar sequences)
-    'mafft_retree': 2,  # Number of tree rebuilding cycles (better alignment quality)
-    'mafft_op': 1.53,  # Gap opening penalty (moderate for similar sequences)
-    'mafft_ep': 0.123,  # Gap extension penalty (low for small indels and length differences)
-    'mafft_use_localpair': False,  # Use global alignment for full sequence coverage
-    'mafft_threads': 1,  # Number of threads (single thread for consistency)
-}
+# (MAFFT polishing parameters removed)
 
 # =============================================================================
 # RACON POLISHING PARAMETERS
@@ -138,19 +92,17 @@ DEBUG_PARAMS = {
 # ALGORITHM SELECTION
 # =============================================================================
 
-# Available clustering algorithms
+# Available clustering algorithms (BLAST removed)
 CLUSTERING_ALGORITHMS = {
-    'blast': 'cluster_by_blast',
     'vsearch': 'cluster_by_vsearch'
 }
 
-# Available polishing algorithms
+# Available polishing algorithms (MAFFT removed)
 POLISHING_ALGORITHMS = {
-    'mafft': 'polish_by_mafft',
     'racon': 'polish_by_racon',
     'simple': 'polish_simple'  # Simple consensus without alignment
 }
 
 # Default algorithm selections
-DEFAULT_CLUSTERING_ALGORITHM = 'blast'
-DEFAULT_POLISHING_ALGORITHM = 'mafft'
+DEFAULT_CLUSTERING_ALGORITHM = 'vsearch'
+DEFAULT_POLISHING_ALGORITHM = 'racon'
